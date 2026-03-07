@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>拼吧! 雄鷹</title>
+    <style>
+        /* ==================== 1. 全局設定 ==================== */
+        :root {
+            --c-pink: #ff85c0; --c-green: #69f0ae; --c-blue: #4fc3f7; --c-orange: #ffb74d; --c-yellow: #fff176;
+            --theme-gold: #d4af37; --theme-warm-gold: #ffd700; --theme-orange: #e87e04; --theme-cream: #fffbf0;
+            --bg-warm-start: #fff9c4; --bg-warm-end: #ffe0b2;
+            --grid-border-color: #b8860b; 
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        html, body {
+            margin: 0; padding: 0; 
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            width: 100%; height: 100%;
+            overflow: hidden; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex; flex-direction: column;
+            user-select: none; -webkit-user-select: none;
+            background: linear-gradient(135deg, var(--theme-cream), var(--bg-warm-start));
+        }
+
+        body::before {
+            content: ''; position: absolute; top:0; left:0; width:100%; height:100%;
+            background-image: radial-gradient(circle at 30% 40%, rgba(255, 215, 0, 0.15) 0%, transparent 50%), radial-gradient(circle at 70% 60%, rgba(232, 126, 4, 0.1) 0%, transparent 50%);
+            background-size: 150% 150%; animation: warm-flow 15s ease infinite alternate; z-index: -1;
+        }
+        @keyframes warm-flow { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+
+        .bg-floating-blocks { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; overflow: hidden; }
+        .bg-shape { position: absolute; opacity: 0.35; filter: blur(6px); animation: float-rotate 25s infinite linear alternate; display: flex; flex-direction: column; gap: 2px; }
+        .bg-shape-row { display: flex; gap: 2px; }
+        .bg-cell { width: 25px; height: 25px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .bg-cell.empty { background: transparent; box-shadow: none; }
+        .bs1 { top: 10%; left: 10%; animation-duration: 30s; } .bs2 { top: 65%; left: 80%; animation-duration: 35s; animation-delay: -5s; transform-origin: center; } .bs3 { top: 85%; left: 15%; animation-duration: 28s; animation-delay: -10s; transform-origin: bottom left;} .bs4 { top: 25%; left: 60%; animation-duration: 32s; animation-delay: -2s;} .bs5 { top: 50%; left: 40%; animation-duration: 26s; animation-delay: -8s;} .bs6 { top: 5%; left: 85%; animation-duration: 38s; animation-delay: -15s;} .bs7 { top: 75%; left: 5%; animation-duration: 31s; animation-delay: -20s;} 
+        @keyframes float-rotate { 0% { transform: translate(0, 0) rotate(0deg) scale(1); } 100% { transform: translate(-40px, 50px) rotate(360deg) scale(1.1); } }
+
+        /* ==================== 2. 全新大師級版面配置 ==================== */
+        .main-container { flex: 1; display: flex; position: relative; overflow: hidden; flex-direction: row; z-index: 10; min-height: 0; }
+
+        .left-col {
+            width: 300px; height: 100%; display: flex; flex-direction: column;
+            background: rgba(255,255,255,0.6); backdrop-filter: blur(5px);
+            border-right: 1px solid rgba(0,0,0,0.05); z-index: 10;
+        }
+
+        .brand-title {
+            padding: 25px 15px 10px 15px; display: flex; justify-content: center; align-items: center; flex-shrink: 0;
+        }
+        .header-title-img { width: 100%; max-width: 260px; height: auto; object-fit: contain; filter: drop-shadow(0 5px 8px rgba(0,0,0,0.15)); }
+
+        .inventory-area {
+            flex: 1; display: flex; flex-direction: column; padding: 10px 15px 20px 15px; overflow-y: auto; 
+            touch-action: pan-x pan-y; /* 確保可以滑動 */
+            scrollbar-width: auto; scrollbar-color: rgba(184, 134, 11, 0.5) rgba(255, 255, 255, 0.5);
+        }
+        
+        .inventory-area::-webkit-scrollbar { -webkit-appearance: none; }
+        .inventory-area::-webkit-scrollbar:vertical { width: 26px; }
+        .inventory-area::-webkit-scrollbar:horizontal { height: 26px; }
+        .inventory-area::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.6); border-radius: 13px; border: 1px solid rgba(184, 134, 11, 0.2); margin: 5px; }
+        .inventory-area::-webkit-scrollbar-thumb { background-color: rgba(184, 134, 11, 0.5); border-radius: 13px; border: 4px solid transparent; background-clip: padding-box; }
+        .inventory-area::-webkit-scrollbar-thumb:active, .inventory-area::-webkit-scrollbar-thumb:hover { background-color: rgba(184, 134, 11, 0.8); }
+
+        .inv-item {
+            border: 3px solid #fff; border-radius: 16px; padding: 10px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: rgba(255,255,255,0.95); box-shadow: 0 4px 10px rgba(0,0,0,0.08); 
+            min-height: 110px; margin-bottom: 12px; flex-shrink: 0;
+            /* 💡 移除 touch-action: none; 讓卡片的白色區域可以自由滑動 */
+        }
+        .preview-box { width: 75px; height: 75px; display: flex; justify-content: center; align-items: center; }
+        
+        /* 💡 精準觸控區域設定 */
+        .mini-board {
+            pointer-events: none; /* 忽略方塊之間的空白縫隙點擊 */
+            touch-action: none;
+            cursor: grab;
+        }
+        .mini-cell { 
+            width: 18px; height: 18px; /* 稍微放大格子，更好點擊 */
+            border: 1px solid #eee; margin: 1px; border-radius: 1px; 
+            pointer-events: auto; /* 只有實際顏色的格子會觸發點擊/拖曳 */
+            touch-action: none;   /* 摸到顏色格子時不要滑動畫面 */
+        }
+
+        .shape-name { font-size: 15px; color: #555; font-weight: 900; margin-bottom: 3px; pointer-events: none;}
+        .count-badge { background: var(--theme-orange); color: white; padding: 3px 12px; border-radius: 12px; font-size: 13px; font-weight:bold; pointer-events: none;}
+
+        .center-panel { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 0; padding: 20px; }
+
+        .game-stage {
+            flex: 1; display: flex; justify-content: center; align-items: center;
+            position: relative; touch-action: none; width: 100%; height: 100%;
+        }
+        .grid-wrapper {
+            background: #fff8e1; padding: 6px; border-radius: 10px; box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+            border: 6px solid var(--grid-border-color); transition: width 0.2s, height 0.2s; box-sizing: border-box; 
+        }
+        #grid { display: grid; background-color: #ccc; gap: 1px; border: 2px solid #ddd; }
+        
+        .right-area {
+            width: 160px; height: 100%; background: rgba(255,255,255,0.5); border-left: 1px solid rgba(0,0,0,0.05);
+            display: flex; flex-direction: column; align-items: center; padding: 30px 15px; gap: 25px; z-index: 10; backdrop-filter: blur(5px);
+        }
+
+        .score-board-winged {
+            position: relative; background: #fff; border: 4px solid var(--theme-gold); border-radius: 14px; padding: 10px 20px;
+            display: flex; flex-direction: column; align-items: center; box-shadow: 0 8px 20px rgba(184, 134, 11, 0.25); width: 100%; margin-bottom: 10px;
+        }
+        .score-board-winged::before, .score-board-winged::after { content: ''; position: absolute; top: 50%; width: 20px; height: 32px; background: var(--theme-gold); transform: translateY(-50%); border-radius: 8px; z-index: -1; }
+        .score-board-winged::before { left: -10px; transform: translateY(-50%) rotate(-20deg); }
+        .score-board-winged::after { right: -10px; transform: translateY(-50%) rotate(20deg); }
+        .score-label { font-size: 14px; font-weight: bold; color: var(--theme-gold); text-transform: uppercase; margin-bottom: 2px;}
+        .score-val { font-size: 36px; color: var(--theme-orange); font-weight: 900; line-height: 1; }
+
+        .controls-group { display: flex; flex-direction: column; gap: 15px; width: 100%; }
+        .btn {
+            background: rgba(255,255,255,0.95); border: 3px solid #fceea7; padding: 12px 0; border-radius: 25px; 
+            font-size: 16px; font-weight: bold; color: #b8860b; width: 100%; text-align: center;
+            box-shadow: 0 4px 8px rgba(184, 134, 11, 0.15); cursor: pointer; transition: transform 0.1s;
+        }
+        .btn:active { transform: scale(0.95); }
+        .btn-end { 
+            background: linear-gradient(to right, var(--theme-orange), #ff7e5f);
+            color: white; border: none; box-shadow: 0 5px 15px rgba(232, 126, 4, 0.4); margin-top: 10px; padding: 15px 0; font-size: 18px;
+        }
+
+        /* 方塊與連線特效 */
+        .cell { background: #fff; border-radius: 1px; transition: background-color 0.2s; }
+        .cell.filled { border: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05); }
+        .cell.scored-line { box-shadow: inset 0 0 0 3px var(--theme-gold) !important; position: relative; z-index: 5;}
+        #grid.flash-board .cell.scored-line { animation: majestic-flash 0.8s ease-out forwards !important; }
+        @keyframes majestic-flash {
+            0% { transform: scale(1); filter: brightness(1); box-shadow: inset 0 0 0 3px var(--theme-gold); }
+            40% { transform: scale(1.08); filter: brightness(1.3); box-shadow: inset 0 0 0 5px #fff, 0 0 25px rgba(255, 215, 0, 0.9); background-color: #fffacd; z-index: 10; }
+            100% { transform: scale(1); filter: brightness(1); box-shadow: inset 0 0 0 3px var(--theme-gold); }
+        }
+        .cell.ghost { background-color: rgba(76, 175, 80, 0.6) !important; box-shadow: inset 0 0 0 2px #2e7d32 !important; }
+        .mini-row { display: flex; }
+        .c-pink { background: var(--c-pink); } .c-green { background: var(--c-green); } .c-blue { background: var(--c-blue); } .c-orange { background: var(--c-orange); } .c-yellow { background: var(--c-yellow); }
+
+        .drag-obj { position: fixed; pointer-events: none; z-index: 99999; opacity: 0.9; left: -9999px; top: -9999px; transform: translate(-50%, -50%); }
+        #toast { position: fixed; bottom: 50%; left: 50%; transform: translate(-50%, 50%); background: rgba(90, 60, 0, 0.9); color: white; padding: 12px 24px; border-radius: 30px; font-size: 16px; font-weight:bold; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 1000; text-align: center; }
+
+        /* ==================== 4. 啟動與結算 ==================== */
+        #start-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 253, 240, 0.98); z-index: 99999; display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        .start-title-img { width: 85%; max-width: 450px; margin-bottom: 30px; object-fit: contain; }
+        #start-btn {
+            background: linear-gradient(135deg, var(--theme-orange), #ff6b4a); color: white; border: none; padding: 20px 60px; font-size: 24px; font-weight: bold; border-radius: 50px; box-shadow: 0 10px 25px rgba(232, 126, 4, 0.4); cursor: pointer;
+        }
+
+        #summary-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 88888; display: none; justify-content: center; align-items: center; background: rgba(255, 251, 240, 0.9); padding: 20px;
+        }
+        #summary-overlay[style*="display: block"] { display: block !important; }
+        #falling-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+        .summary-card {
+            background: rgba(255, 255, 255, 0.98); width: 90%; max-width: 450px; max-height: 85vh; overflow-y: auto; border-radius: 35px; padding: 30px 20px; text-align: center; box-shadow: 0 25px 70px rgba(212, 175, 55, 0.3); position: relative; border: 4px solid var(--theme-warm-gold); margin: auto; top: 50%; transform: translateY(-50%); box-sizing: border-box;
+        }
+        .grand-emblem-box { margin: 0 auto 20px auto; display: flex; justify-content: center; }
+        .grand-emblem {
+            width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, #fff 30%, #fff0c0 100%); border-radius: 50%; border: 12px solid var(--theme-warm-gold); box-shadow: 0 0 0 6px #fff, 0 12px 50px rgba(255, 215, 0, 0.6); animation: emblem-pulse-warm 3s infinite ease-in-out; overflow: hidden;
+        }
+        .eagle-logo-img { width: 85%; height: 85%; object-fit: contain; }
+        @keyframes emblem-pulse-warm { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        
+        .poster-slogan { width: 100%; margin: 0 auto 15px auto; text-align: center; box-sizing: border-box; }
+        .slogan-img { width: 90%; max-width: 380px; height: auto !important; object-fit: contain !important; display: block; margin: 0 auto; }
+        
+        .summary-title { font-size: 28px; font-weight: 900; color: #555; margin-bottom: 15px; }
+        .result-box { width: 100%; background: #fffbf0; border: 3px solid var(--theme-gold); border-radius: 20px; padding: 10px; margin-bottom: 20px; box-sizing: border-box;}
+        .result-score-label { font-size: 16px; color: var(--theme-gold); font-weight: bold; text-transform: uppercase;}
+        .result-score-val { font-size: 60px; color: var(--theme-orange); font-weight: 900; line-height: 1; margin: 5px 0;}
+        .stats-list { width: 100%; text-align: left; font-size: 15px; color: #666; margin-bottom: 20px; padding: 0 15px; box-sizing: border-box;}
+        .stat-item { display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 10px 0; }
+        .stat-item b { color: var(--theme-orange); font-size: 16px;}
+        .close-btn { background: linear-gradient(to right, var(--theme-orange), #ff9f43); color: white; border: none; padding: 15px 50px; font-size: 20px; border-radius: 50px; cursor: pointer; font-weight: 900; box-shadow: 0 5px 25px rgba(232, 126, 4, 0.4); margin-bottom: 10px;}
+
+        /* ==================== 5. 客製化防誤觸確認視窗 ==================== */
+        #confirm-overlay, #finish-confirm-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 253, 240, 0.85); z-index: 99999; display: none; justify-content: center; align-items: center; backdrop-filter: blur(3px);
+        }
+        .confirm-card { background: #fff; padding: 30px; border-radius: 25px; border: 4px solid var(--theme-gold); box-shadow: 0 15px 40px rgba(212, 175, 55, 0.3); text-align: center; max-width: 85%; width: 340px; }
+        .confirm-title { font-size: 24px; font-weight: 900; color: #555; margin-bottom: 25px; }
+        .confirm-btns { display: flex; gap: 15px; justify-content: center; }
+        .btn-cancel { flex: 1; padding: 12px; border-radius: 20px; border: 2px solid #ccc; background: #f5f5f5; font-size: 16px; font-weight: bold; color: #666; cursor: pointer; }
+        .btn-confirm { flex: 1; padding: 12px 5px; border-radius: 20px; border: none; background: linear-gradient(to right, var(--theme-orange), #ff7e5f); font-size: 16px; font-weight: bold; color: white; cursor: pointer; box-shadow: 0 4px 10px rgba(232, 126, 4, 0.3); }
+        .btn-cancel:active, .btn-confirm:active { transform: scale(0.95); }
+
+        /* ==================== 6. 手機/平板版 RWD ==================== */
+        @media (max-width: 768px) { 
+            .left-col { display: contents; }
+            .main-container { flex-direction: column; } 
+            .bg-floating-blocks { display: none; }
+            .brand-title { order: 1; padding: 10px; background: rgba(255,255,255,0.7); }
+            .header-title-img { max-width: 90vw; height: 90px; }
+            .center-panel { order: 2; flex: none; height: auto; }
+            .game-stage { padding: 5px 10px; min-height: 300px; height: 350px;}
+            .inventory-area { order: 3; width: 100%; height: 155px; min-height: 155px; border-right: none; border-top: 2px solid var(--grid-border-color); flex-direction: row; overflow-x: auto; padding: 10px; background: rgba(255,255,255,0.8); } 
+            .inv-item { width: 90px; height: 100%; justify-content: space-between; padding: 8px; min-height: auto; margin: 0; margin-right: 12px;} 
+            .right-area { order: 4; width: 100%; height: auto; flex-direction: row; flex-wrap: wrap; justify-content: center; padding: 15px 10px; gap: 10px; border-left: none; border-top: 1px solid rgba(0,0,0,0.05); background: rgba(255,255,255,0.9); }
+            .score-board-winged { width: 45%; margin-bottom: 0; order: 1; }
+            .controls-group { width: 100%; flex-direction: row; order: 2; }
+            .btn { width: auto; flex: 1; padding: 10px 0; font-size: 14px;}
+            .btn-end { margin-top: 0; flex: 1.5; }
+            .summary-card { width: 95%; padding: 20px 15px; max-width: 400px;}
+            .grand-emblem { width: 180px; height: 180px; border-width: 10px; }
+            .slogan-img { width: 95%; max-width: 300px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg-floating-blocks">
+        <div class="bg-shape bs1"><div class="bg-shape-row"><div class="bg-cell c-pink"></div><div class="bg-cell c-pink"></div></div><div class="bg-shape-row"><div class="bg-cell c-pink"></div><div class="bg-cell c-pink"></div></div></div>
+        <div class="bg-shape bs2"><div class="bg-shape-row"><div class="bg-cell c-orange"></div><div class="bg-cell empty"></div></div><div class="bg-shape-row"><div class="bg-cell c-orange"></div><div class="bg-cell empty"></div></div><div class="bg-shape-row"><div class="bg-cell c-orange"></div><div class="bg-cell c-orange"></div></div></div>
+        <div class="bg-shape bs3"><div class="bg-shape-row"><div class="bg-cell c-blue"></div></div><div class="bg-shape-row"><div class="bg-cell c-blue"></div></div><div class="bg-shape-row"><div class="bg-cell c-blue"></div></div><div class="bg-shape-row"><div class="bg-cell c-blue"></div></div></div>
+        <div class="bg-shape bs4"><div class="bg-shape-row"><div class="bg-cell c-yellow"></div><div class="bg-cell c-yellow"></div><div class="bg-cell c-yellow"></div></div><div class="bg-shape-row"><div class="bg-cell empty"></div><div class="bg-cell c-yellow"></div><div class="bg-cell empty"></div></div></div>
+        <div class="bg-shape bs5"><div class="bg-shape-row"><div class="bg-cell c-green"></div><div class="bg-cell c-green"></div><div class="bg-cell empty"></div></div><div class="bg-shape-row"><div class="bg-cell empty"></div><div class="bg-cell c-green"></div><div class="bg-cell c-green"></div></div></div>
+        <div class="bg-shape bs6"><div class="bg-shape-row"><div class="bg-cell empty"></div><div class="bg-cell c-pink"></div></div><div class="bg-shape-row"><div class="bg-cell empty"></div><div class="bg-cell c-pink"></div></div><div class="bg-shape-row"><div class="bg-cell c-pink"></div><div class="bg-cell c-pink"></div></div></div>
+        <div class="bg-shape bs7"><div class="bg-shape-row"><div class="bg-cell empty"></div><div class="bg-cell c-orange"></div><div class="bg-cell c-orange"></div></div><div class="bg-shape-row"><div class="bg-cell c-orange"></div><div class="bg-cell c-orange"></div><div class="bg-cell empty"></div></div></div>
+    </div>
+
+    <div id="confirm-overlay">
+        <div class="confirm-card">
+            <div class="confirm-title">確定要重來嗎？</div>
+            <div class="confirm-btns">
+                <button class="btn-confirm" onclick="executeRestart()">確定要重來</button>
+                <button class="btn-cancel" onclick="closeConfirm()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="finish-confirm-overlay">
+        <div class="confirm-card">
+            <div class="confirm-title" style="margin-bottom: 10px;">確定結束挑戰？</div>
+            <div style="font-size: 15px; color: #e87e04; font-weight: bold; margin-bottom: 20px;">(提醒：此次遊戲紀錄將不會保留)</div>
+            <div class="confirm-btns">
+                <button class="btn-confirm" onclick="executeFinish()" style="font-size: 15px;">確認完成挑戰</button>
+                <button class="btn-cancel" onclick="closeFinishConfirm()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="start-overlay">
+        <img src="https://i.ibb.co/PzC7y0Dg/IMG-1808.png" alt="拼吧！雄鷹" class="start-title-img">
+        <button id="start-btn" onclick="startGame()" ontouchstart="startGame()">👉 點我開始遊戲 👈</button>
+    </div>
+
+    <div id="summary-overlay">
+        <canvas id="falling-canvas"></canvas>
+        <div class="summary-card">
+            <div class="grand-emblem-box">
+                <div class="grand-emblem">
+                    <img src="https://i.ibb.co/yFMc15zN/IMG-1809.png" alt="Eagle" class="eagle-logo-img" onerror="this.outerHTML='<div style=\'font-size: 80px;\'>🦅</div>'">
+                </div>
+            </div>
+            
+            <div class="poster-slogan">
+                <img src="https://i.ibb.co/6JH2tnhz/2-1.png" alt="口號" class="slogan-img">
+            </div>
+            
+            <div class="summary-title">挑戰結算</div>
+            <div class="result-box"><div class="result-score-label">總連線數</div><div class="result-score-val" id="final-score">0</div></div>
+            <div class="stats-list" id="stats-list"></div>
+            <button class="close-btn" onclick="promptFinish()">完成挑戰</button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        
+        <div class="left-col">
+            <div class="brand-title">
+                <img src="https://i.ibb.co/PzC7y0Dg/IMG-1808.png" alt="拼吧！雄鷹" class="header-title-img">
+            </div>
+            <div class="inventory-area">
+                <div id="inventory-list" style="display:flex; gap:10px; flex-direction: inherit;"></div>
+            </div>
+        </div>
+
+        <div class="center-panel">
+            <div class="game-stage" id="stage">
+                <div class="grid-wrapper" id="grid-wrapper">
+                    <div id="grid"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-area">
+            <div class="score-board-winged">
+                <span class="score-label">連線數</span>
+                <span class="score-val" id="score">0</span>
+            </div>
+            <div class="controls-group">
+                <button class="btn" onclick="resizeGrid()">重整</button>
+                <button class="btn" onclick="promptRestart()">重來</button>
+                <button class="btn btn-end" onclick="showSummary()">結算</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+<script>
+    const RAW_SHAPES = [
+        { l:"大學會凝聚", c:"c-pink", count: 4, m:[[1,1],[1,1]] },
+        { l:"對話邀約",   c:"c-green", count: 4, m:[[1,0,0],[1,1,1]] }, 
+        { l:"培育",       c:"c-blue", count: 4, m:[[1,1,0],[0,1,1]] },
+        { l:"信仰",       c:"c-orange", count: 5, m:[[0,1,0],[1,1,1]] }, 
+        { l:"挑戰方塊",   c:"c-yellow", count: 3, m:[[1,1,1,1]] }
+    ];
+    const BLOCK_COLORS = ['#ff85c0', '#69f0ae', '#4fc3f7', '#ffb74d', '#fff176'];
+
+    let GRID_SIZE = 11; 
+    let gridData = [], inventory = [], score = 0, cellSize = 34;
+
+    function startGame() {
+        const overlay = document.getElementById('start-overlay');
+        if(overlay) {
+            overlay.style.opacity = '0';
+            setTimeout(() => overlay.remove(), 300);
+        }
+        
+        initGame();
+        let retryCount = 0;
+        let checkInterval = setInterval(() => {
+            if (cellSize > 10) { 
+                clearInterval(checkInterval);
+            } else {
+                resizeGrid(); 
+                retryCount++;
+                if(retryCount > 10) clearInterval(checkInterval); 
+            }
+        }, 500);
+        
+        showToast("✨ 長按方塊可移動位置 ✨");
+    }
+
+    function promptRestart() { document.getElementById('confirm-overlay').style.display = 'flex'; }
+    function closeConfirm() { document.getElementById('confirm-overlay').style.display = 'none'; }
+    function executeRestart() {
+        closeConfirm();
+        initGame();
+        showToast("遊戲已重置 ✨");
+    }
+
+    function promptFinish() { document.getElementById('finish-confirm-overlay').style.display = 'flex'; }
+    function closeFinishConfirm() { document.getElementById('finish-confirm-overlay').style.display = 'none'; }
+    function executeFinish() {
+        closeFinishConfirm();
+        closeSummary();
+        initGame(); 
+        showToast("挑戰結束，遊戲已重置 ✨");
+    }
+
+    function initGame() {
+        inventory = RAW_SHAPES.map(s => ({...s, initial: s.count, cur: JSON.parse(JSON.stringify(s.m))}));
+        score = 0; 
+        updateScore(); createGridDOM(); renderInventory(); renderGrid();
+        
+        const wrapper = document.getElementById('grid-wrapper');
+        wrapper.removeEventListener('touchstart', handleGridTouchStart);
+        wrapper.addEventListener('touchstart', handleGridTouchStart, {passive: false});
+        wrapper.addEventListener('touchmove', handleGridTouchMove, {passive: false});
+        wrapper.addEventListener('touchend', handleGridTouchEnd);
+        wrapper.addEventListener('touchcancel', handleGridTouchEnd);
+        wrapper.addEventListener('mousedown', handleGridMouseDown);
+        document.addEventListener('mousemove', handleGridMouseMove);
+        document.addEventListener('mouseup', handleGridMouseUp);
+
+        resizeGrid();
+        window.addEventListener('resize', resizeGrid);
+    }
+
+    let canvas, ctx, animationFrameId;
+    let blocks = [], colHeights = [], cols; const blockSize = 40;
+
+    function showSummary() {
+        const summaryOverlay = document.getElementById('summary-overlay');
+        document.getElementById('final-score').innerText = score;
+        const statsList = document.getElementById('stats-list');
+        statsList.innerHTML = '';
+        inventory.forEach(item => {
+            let used = item.initial - item.count; if(used < 0) used = 0;
+            statsList.innerHTML += `<div class="stat-item"><span>${item.l}</span> <span>使用: <b>${used}</b> 個</span></div>`;
+        });
+        summaryOverlay.style.display = 'block';
+        initFallingBlocks();
+    }
+
+    function closeSummary() {
+        document.getElementById('summary-overlay').style.display = 'none';
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+    }
+
+    function initFallingBlocks() {
+        canvas = document.getElementById('falling-canvas');
+        ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+        cols = Math.floor(canvas.width / blockSize);
+        colHeights = Array(cols).fill(canvas.height);
+        blocks = [];
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        animateBlocks();
+    }
+
+    class Block {
+        constructor() {
+            this.col = Math.floor(Math.random() * cols);
+            this.x = this.col * blockSize; this.y = -blockSize;
+            this.targetY = colHeights[this.col] - blockSize;
+            this.color = BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)];
+            this.speed = Math.random() * 5 + 4;
+            this.landed = false;
+        }
+        update() {
+            if (this.y < this.targetY) {
+                this.y += this.speed;
+                if (this.y >= this.targetY) { this.y = this.targetY; this.landed = true; colHeights[this.col] -= blockSize; }
+            }
+        }
+        draw() {
+            ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, blockSize - 2, blockSize - 2);
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.strokeRect(this.x, this.y, blockSize - 2, blockSize - 2);
+        }
+    }
+
+    function animateBlocks() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (Math.random() < 0.25) { let b = new Block(); if (b.targetY > 0) blocks.push(b); }
+        blocks.forEach(b => { if (!b.landed) b.update(); b.draw(); });
+        animationFrameId = requestAnimationFrame(animateBlocks);
+    }
+
+    function resizeGrid() {
+        const stage = document.getElementById('stage');
+        if (!stage) return;
+
+        let availableH = window.innerHeight;
+        let isMobile = window.innerWidth < 768;
+        
+        let deduction = isMobile ? 180 : 100; 
+        
+        let w = stage.clientWidth - 20; 
+        let h = stage.clientHeight - 20; 
+        if (h < availableH - deduction) h = availableH - deduction; 
+
+        if (w < 150) w = 150; 
+        if (h < 150) h = 150; 
+        
+        let size = Math.floor(Math.min(w / GRID_SIZE, h / GRID_SIZE));
+        
+        if(size > 65) size = 65; 
+        if(size < 20) size = 20;
+
+        cellSize = size;
+        const grid = document.getElementById('grid');
+        grid.style.gridTemplateColumns = `repeat(${GRID_SIZE}, ${size}px)`;
+        grid.style.gridTemplateRows = `repeat(${GRID_SIZE}, ${size}px)`;
+        
+        document.querySelectorAll('.cell').forEach(c => { 
+            c.style.width = size + 'px'; 
+            c.style.height = size + 'px'; 
+        });
+    }
+
+    function createGridDOM() {
+        const grid = document.getElementById('grid'); grid.innerHTML = '';
+        gridData = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
+        for(let i=0; i<GRID_SIZE*GRID_SIZE; i++) {
+            let d = document.createElement('div'); d.className = 'cell'; grid.appendChild(d);
+        }
+    }
+
+    function renderGrid() {
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach(c => { c.className = 'cell'; });
+        
+        for(let y=0; y<GRID_SIZE; y++) {
+            for(let x=0; x<GRID_SIZE; x++) {
+                let c = cells[y*GRID_SIZE+x]; 
+                c.style.width = cellSize + 'px'; c.style.height = cellSize + 'px';
+                if(gridData[y][x]) {
+                    c.classList.add('filled', gridData[y][x].c);
+                }
+            }
+        }
+        
+        for(let r=0; r<GRID_SIZE; r++) {
+            if(gridData[r].every(cell => cell !== 0)) {
+                for(let c=0; c<GRID_SIZE; c++) { cells[r*GRID_SIZE+c].classList.add('scored-line'); }
+            }
+        }
+        for(let c=0; c<GRID_SIZE; c++) {
+            let full = true;
+            for(let r=0; r<GRID_SIZE; r++) { if(gridData[r][c] === 0) { full = false; break; } }
+            if(full) {
+                for(let r=0; r<GRID_SIZE; r++) { cells[r*GRID_SIZE+c].classList.add('scored-line'); }
+            }
+        }
+    }
+
+    function renderInventory() {
+        const list = document.getElementById('inventory-list'); list.innerHTML = '';
+        inventory.forEach((item, idx) => {
+            let div = document.createElement('div'); div.className = 'inv-item';
+            let preview = document.createElement('div'); preview.className = 'preview-box';
+            
+            // 💡 提取專用感應區
+            let mini = document.createElement('div'); mini.className = 'mini-board'; 
+            drawMini(mini, item.cur, item.c);
+            
+            if(item.count<=0) mini.style.opacity = 0.3; preview.appendChild(mini);
+            let label = document.createElement('div'); label.className = 'shape-name'; label.innerText = item.l;
+            let badge = document.createElement('div'); badge.className = 'count-badge'; badge.innerText = 'x'+item.count;
+            
+            if(item.count > 0) {
+                // 💡 綁定事件到 mini-board (僅實體方塊會觸發，周圍空白會直接穿透去滑動選單)
+                mini.addEventListener('mousedown', (e)=> { 
+                    e.stopPropagation(); startInventoryDrag(e, idx, false); 
+                });
+                mini.addEventListener('touchstart', (e)=> { 
+                    e.stopPropagation(); 
+                    e.preventDefault(); // 💡 阻斷平板幽靈點擊 (防止點一次轉兩次)
+                    startInventoryDrag(e, idx, true); 
+                }, {passive:false});
+            }
+            div.appendChild(preview); div.appendChild(label); div.appendChild(badge); list.appendChild(div);
+        });
+    }
+
+    function drawMini(el, m, c) {
+        el.innerHTML = m.map(r => `<div class="mini-row">${r.map(v => `<div class="mini-cell ${v?c:''}" style="${!v?'visibility:hidden':''}"></div>`).join('')}</div>`).join('');
+    }
+
+    let isDrag = false, dragIdx = -1, ghost = null, isGridPickup = false;
+    let pressTimer = null, startX = 0, startY = 0;
+
+    function startInventoryDrag(e, idx, isTouch) {
+        let pt = isTouch ? e.touches[0] : e;
+        isDrag = false; dragIdx = idx; startX = pt.clientX; startY = pt.clientY; isGridPickup = false;
+        if(isTouch) { 
+            document.addEventListener('touchmove', onTouchMove, {passive:false}); 
+            document.addEventListener('touchend', onEnd); 
+            document.addEventListener('touchcancel', onEnd); 
+        } else { 
+            document.addEventListener('mousemove', onMouseMove); 
+            document.addEventListener('mouseup', onEnd); 
+        }
+    }
+
+    function handleGridTouchStart(e) {
+        if(e.touches.length > 1) return;
+        startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+        pressTimer = setTimeout(() => { liftShapeFromGrid(startX, startY, true); }, 500);
+    }
+    function handleGridTouchMove(e) {
+        if(pressTimer && (Math.abs(e.touches[0].clientX - startX) > 10 || Math.abs(e.touches[0].clientY - startY) > 10)) { clearTimeout(pressTimer); pressTimer = null; }
+        if(isDrag) onTouchMove(e);
+    }
+    function handleGridTouchEnd(e) { if(pressTimer) { clearTimeout(pressTimer); pressTimer = null; } if(isDrag) onEnd(); }
+    function handleGridMouseDown(e) { startX = e.clientX; startY = e.clientY; liftShapeFromGrid(startX, startY, false); }
+    function handleGridMouseMove(e) { if(isDrag) onMouseMove(e); }
+    function handleGridMouseUp(e) { if(isDrag) onEnd(); }
+
+    function liftShapeFromGrid(clientX, clientY, isTouch) {
+        let gridEl = document.getElementById('grid'); let rect = gridEl.getBoundingClientRect();
+        let x = Math.floor((clientX - rect.left) / cellSize); let y = Math.floor((clientY - rect.top) / cellSize);
+        if(x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE || !gridData[y][x]) return;
+        if(navigator.vibrate) navigator.vibrate(50);
+        let targetID = gridData[y][x].id; let typeIdx = gridData[y][x].typeIdx;
+        let cells = []; let minX = GRID_SIZE, minY = GRID_SIZE, maxX = -1, maxY = -1;
+        for(let r=0; r<GRID_SIZE; r++) for(let c=0; c<GRID_SIZE; c++) if(gridData[r][c] && gridData[r][c].id === targetID) {
+            cells.push({r, c}); if(c < minX) minX = c; if(r < minY) minY = r; if(c > maxX) maxX = c; if(r > maxY) maxY = r;
+        }
+        let h = maxY - minY + 1; let w = maxX - minX + 1; let matrix = Array(h).fill().map(() => Array(w).fill(0));
+        cells.forEach(p => { matrix[p.r - minY][p.c - minX] = 1; gridData[p.r][p.c] = 0; });
+        
+        recalculateScore();
+        renderGrid(); 
+        
+        isDrag = true; isGridPickup = true; dragIdx = typeIdx !== undefined ? typeIdx : 0; inventory[dragIdx].cur = matrix;
+        createGhost(); if(ghost) { let offset = isTouch ? 70 : 0; ghost.style.left = clientX + 'px'; ghost.style.top = (clientY - offset) + 'px'; }
+    }
+
+    function onTouchMove(e) {
+        if(!isDrag) { 
+            // 💡 放寬判定：手指即使微抖15px內，依然判定為點擊旋轉，解決旋轉不靈敏問題
+            if(Math.abs(e.touches[0].clientX - startX) > 15 || Math.abs(e.touches[0].clientY - startY) > 15) { 
+                isDrag = true; createGhost(); 
+            } 
+            return; 
+        }
+        e.preventDefault(); updateGhostPos(e.touches[0].clientX, e.touches[0].clientY, true);
+    }
+    function onMouseMove(e) {
+        if(!isDrag) { if(Math.abs(e.clientX - startX) > 5) { isDrag = true; createGhost(); } return; }
+        updateGhostPos(e.clientX, e.clientY, false);
+    }
+    function updateGhostPos(cx, cy, isTouch) {
+        if(!ghost) return; let offset = isTouch ? 70 : 0; ghost.style.left = cx + 'px'; ghost.style.top = (cy - offset) + 'px'; updateShadow(cx, cy - offset);
+    }
+
+    function createGhost() {
+        let item = inventory[dragIdx]; ghost = document.createElement('div'); ghost.className = 'drag-obj';
+        let d = document.createElement('div'); drawMini(d, item.cur, item.c); ghost.innerHTML = d.innerHTML;
+        ghost.querySelectorAll('.mini-cell').forEach(c => { c.style.width = cellSize+'px'; c.style.height = cellSize+'px'; c.style.border='1px solid #fff'; });
+        document.body.appendChild(ghost);
+    }
+
+    let lastX = -1, lastY = -1;
+    function updateShadow(x, y) {
+        document.querySelectorAll('.ghost').forEach(c => c.classList.remove('ghost')); if(!ghost) return;
+        let gridEl = document.getElementById('grid'); let rect = gridEl.getBoundingClientRect();
+        let m = inventory[dragIdx].cur; 
+        let mHeight = m.length; let mWidth = m[0].length;
+        
+        let ghostVisualLeft = x - (mWidth * cellSize) / 2;
+        let ghostVisualTop = y - (mHeight * cellSize) / 2;
+        
+        let fx = Math.round((ghostVisualLeft - rect.left) / cellSize);
+        let fy = Math.round((ghostVisualTop - rect.top) / cellSize);
+        
+        if (fx < 0 && fx >= -2) fx = 0;
+        if (fx + mWidth > GRID_SIZE && fx + mWidth <= GRID_SIZE + 2) fx = GRID_SIZE - mWidth;
+        if (fy < 0 && fy >= -2) fy = 0;
+        if (fy + mHeight > GRID_SIZE && fy + mHeight <= GRID_SIZE + 2) fy = GRID_SIZE - mHeight;
+
+        if(canPlace(m, fx, fy)) {
+            let cells = document.getElementById('grid').children;
+            m.forEach((r, dy) => r.forEach((v, dx) => { 
+                if(v) { 
+                    let idx = (fy+dy)*GRID_SIZE + (fx+dx); 
+                    if(cells[idx]) cells[idx].classList.add('ghost'); 
+                } 
+            }));
+            lastX = fx; lastY = fy;
+        } else { lastX = -1; }
+    }
+
+    function onEnd() {
+        if(!isGridPickup) { 
+            document.removeEventListener('touchmove', onTouchMove); 
+            document.removeEventListener('touchend', onEnd); 
+            document.removeEventListener('touchcancel', onEnd); 
+            document.removeEventListener('mousemove', onMouseMove); 
+            document.removeEventListener('mouseup', onEnd); 
+        }
+        if(ghost) {
+            ghost.remove(); ghost = null; document.querySelectorAll('.ghost').forEach(c => c.classList.remove('ghost'));
+            if(lastX !== -1) {
+                place(inventory[dragIdx].cur, lastX, lastY, inventory[dragIdx].c, dragIdx);
+                if(!isGridPickup) inventory[dragIdx].count--;
+                renderInventory(); 
+                
+                recalculateScore();
+                renderGrid();
+            } else if(isGridPickup) { inventory[dragIdx].count++; renderInventory(); showToast("♻️ 方塊已回收"); }
+        } else if (!isDrag && !isGridPickup) {
+            let item = inventory[dragIdx]; let m = item.cur; let N = m.length, M = m[0].length;
+            let res = Array(M).fill().map(()=>Array(N).fill(0)); for(let i=0; i<N; i++) for(let j=0; j<M; j++) res[j][N-1-i] = m[i][j];
+            item.cur = res; renderInventory();
+        }
+        isDrag = false; isGridPickup = false; if(pressTimer) clearTimeout(pressTimer);
+    }
+
+    function canPlace(m, x, y) {
+        return m.every((r, dy) => r.every((v, dx) => {
+            if(!v) return true; 
+            let nx = x+dx, ny = y+dy;
+            return nx>=0 && nx<GRID_SIZE && ny>=0 && ny<GRID_SIZE && !gridData[ny][nx];
+        }));
+    }
+
+    function place(m, x, y, colorClass, typeIdx) {
+        let blockId = Date.now(); 
+        m.forEach((r, dy) => r.forEach((v, dx) => {
+            if(v) {
+                gridData[y+dy][x+dx] = { c: colorClass, id: blockId, typeIdx: typeIdx };
+            }
+        }));
+        if(navigator.vibrate) navigator.vibrate(50);
+    }
+
+    function recalculateScore() {
+        let currentScore = 0;
+        
+        for(let r=0; r<GRID_SIZE; r++) {
+            if(gridData[r].every(cell => cell !== 0)) currentScore++;
+        }
+        for(let c=0; c<GRID_SIZE; c++) {
+            let full = true;
+            for(let r=0; r<GRID_SIZE; r++) { if(gridData[r][c] === 0) { full = false; break; } }
+            if(full) currentScore++;
+        }
+
+        if(currentScore > score) {
+            if(navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            let gridEl = document.getElementById('grid');
+            gridEl.classList.remove('flash-board');
+            void gridEl.offsetWidth; 
+            gridEl.classList.add('flash-board');
+            setTimeout(() => { gridEl.classList.remove('flash-board'); }, 900);
+        }
+        
+        score = currentScore;
+        updateScore();
+    }
+
+    function updateScore() {
+        document.getElementById('score').innerText = score;
+    }
+
+    function showToast(msg) {
+        let toast = document.getElementById('toast');
+        toast.innerText = msg;
+        toast.style.opacity = 1;
+        setTimeout(() => { toast.style.opacity = 0; }, 2000);
+    }
+</script>
+</body>
+</html>
